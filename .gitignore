@@ -131,7 +131,6 @@ dmypy.json
 Thumbs.db
 
 # Project specific
-config.py
 uploads/
 logs/
 *.log
