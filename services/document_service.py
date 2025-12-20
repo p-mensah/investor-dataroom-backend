@@ -1,4 +1,6 @@
 import uuid
+import os
+import mimetypes
 from datetime import datetime
 from typing import List, Optional
 from bson import ObjectId
@@ -28,6 +30,12 @@ class DocumentService:
 
         filename = file.filename
         title = title or filename
+        
+        # Extract file extension and MIME type
+        file_extension = os.path.splitext(filename)[1].lower() if filename else ""
+        mime_type, _ = mimetypes.guess_type(filename)
+        if not mime_type:
+            mime_type = "application/octet-stream"
 
         # Read file bytes
         file_bytes = await file.read()
@@ -44,9 +52,6 @@ class DocumentService:
             folder="dataroom_documents",
         )
 
-        # Fetch category name (optional: you can enhance this later)
-        category_name = "General"
-
         # Prepare document data for MongoDB
         document_data = {
             "title": title,
@@ -54,7 +59,10 @@ class DocumentService:
             "categories": categories,
             "file_path": upload_result["secure_url"],
             "file_url": upload_result["secure_url"],  
-            "file_type": upload_result["resource_type"],
+            "file_type": file_extension,  # Store actual file extension
+            "file_extension": file_extension,
+            "mime_type": mime_type,
+            "original_filename": filename,
             "file_size": upload_result["bytes"],
             "uploaded_at": datetime.utcnow(),
             "uploaded_by": user_id,

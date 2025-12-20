@@ -491,6 +491,40 @@ def update_access_request(
     return {"message": "Access request updated successfully"}
 
 
+@admin_router.delete("/access-requests/{request_id}", response_model=dict)
+def delete_access_request(
+    request_id: str,
+    current_admin: dict = Depends(require_admin)
+):
+    """Delete an access request"""
+    try:
+        obj_id = ObjectId(request_id)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid request ID"
+        )
+    
+    result = access_requests_collection.delete_one({"_id": obj_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Request not found"
+        )
+        
+    # Log the action
+    audit_logs_collection.insert_one({
+        "access_request_id": request_id,
+        "action": "delete",
+        "admin_id": current_admin["id"],
+        "admin_email": current_admin["email"],
+        "timestamp": datetime.utcnow()
+    })
+    
+    return {"message": "Access request deleted successfully"}
+
+
 # User Authentication Routes - OTP
 
 

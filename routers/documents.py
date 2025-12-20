@@ -318,20 +318,86 @@ async def get_document_url(
     document_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get document download URL"""
+    """Get document URL with metadata for preview/download"""
     if not current_user.get("is_admin"):
         check_nda_acceptance(current_user)
         check_access_validity(current_user)
     
-    url = DocumentService.get_document_url(document_id)
+    document = documents_collection.find_one({"_id": ObjectId(document_id)})
     
-    if not url:
+    if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
     
-    return {"url": url, "document_id": document_id}
+    file_url = document.get("file_url") or document.get("file_path")
+    file_type = document.get("file_type", "").lower()
+    file_extension = document.get("file_extension", "").lower()
+    mime_type = document.get("mime_type", "application/octet-stream")
+    original_filename = document.get("original_filename", "")
+    title = document.get("title", "document")
+    
+    # Detect file extension from title if not already set
+    # This handles old documents where file_type is "raw"
+    detected_extension = ""
+    title_lower = title.lower()
+    for ext in ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv', '.zip', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']:
+        if title_lower.endswith(ext):
+            detected_extension = ext
+            break
+    
+    # Use detected extension if file_extension is empty or "raw"
+    if not file_extension or file_extension in ["raw", "image"]:
+        file_extension = detected_extension
+    
+    # Ensure file_extension starts with a dot
+    if file_extension and not file_extension.startswith('.'):
+        file_extension = '.' + file_extension
+    
+    # Set original_filename from title if not set
+    if not original_filename:
+        original_filename = title
+    
+    # Ensure filename has extension
+    if original_filename and file_extension and not original_filename.lower().endswith(file_extension):
+        original_filename = original_filename + file_extension
+    
+    # Create download filename
+    download_filename = original_filename if original_filename else title
+    if download_filename and file_extension and not download_filename.lower().endswith(file_extension):
+        download_filename = download_filename + file_extension
+    
+    # Determine if file can be previewed in browser
+    previewable_extensions = [".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]
+    can_preview = file_extension in previewable_extensions or detected_extension in previewable_extensions
+    
+    # Also check if title ends with previewable extension (fallback)
+    if not can_preview:
+        can_preview = any(title_lower.endswith(ext) for ext in previewable_extensions)
+    
+    # Create download URL with attachment flag for Cloudinary
+    download_url = file_url
+    if file_url and "cloudinary" in file_url:
+        import urllib.parse
+        encoded_filename = urllib.parse.quote(download_filename)
+        if "/raw/upload/" in file_url:
+            download_url = file_url.replace("/raw/upload/", f"/raw/upload/fl_attachment:{encoded_filename}/")
+        elif "/image/upload/" in file_url:
+            download_url = file_url.replace("/image/upload/", f"/image/upload/fl_attachment:{encoded_filename}/")
+    
+    return {
+        "url": file_url,
+        "download_url": download_url,
+        "document_id": document_id,
+        "file_type": file_type,
+        "file_extension": file_extension,
+        "mime_type": mime_type,
+        "original_filename": original_filename,
+        "download_filename": download_filename,
+        "can_preview": can_preview,
+        "title": title
+    }
 
 @router.get("/{document_id}/download")
 async def download_document(
