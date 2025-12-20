@@ -84,14 +84,24 @@ def get_user_permissions(user_id: str):
     """Get user's permission details"""
     permissions = PermissionService.get_user_permissions(user_id)
     
+    # If no specific permissions found, return default investor permissions
     if not permissions:
-        raise HTTPException(status_code=404, detail="User permissions not found")
+        permissions = {
+            "id": "default",
+            "name": "Default Access",
+            "description": "Default access level",
+            "can_view": True,
+            "can_download": True,
+            "has_expiry": False,
+            "max_downloads": None
+        }
     
     can_download = PermissionService.can_download(user_id)
     access_valid = PermissionService.check_access_expiry(user_id)
     
     return {
         "permissions": permissions,
-        "can_download": can_download,
-        "access_valid": access_valid
+        "can_download": can_download if can_download else True,  # Default to true for investors
+        "access_valid": access_valid if access_valid else True   # Default to true for investors
     }
+

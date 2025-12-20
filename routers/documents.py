@@ -31,7 +31,9 @@ security = HTTPBearer()
 
 
 def get_current_user_from_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Extract user from JWT token - supports both admin and regular users"""
+    """Extract user from JWT token - supports admin, regular users, and investors"""
+    from database import investors_collection
+    
     token = credentials.credentials
     payload = AuthService.verify_token(token)
     
@@ -40,7 +42,21 @@ def get_current_user_from_token(credentials: HTTPAuthorizationCredentials = Depe
     
     user_id = payload["sub"]
     
-    # First check if it's an admin user
+    # Check if it's an investor token first (most common case for this app)
+    if payload.get("is_investor"):
+        investor = investors_collection.find_one({"_id": ObjectId(user_id)})
+        if investor:
+            return {
+                "id": str(investor["_id"]),
+                "_id": investor["_id"],
+                "email": investor.get("email", ""),
+                "full_name": investor.get("full_name", ""),
+                "role": "investor",
+                "is_admin": False,
+                "is_active": investor.get("is_active", True)
+            }
+    
+    # Check if it's an admin user
     admin_user = admin_users_collection.find_one({"_id": ObjectId(user_id)})
     if admin_user:
         return {
@@ -64,6 +80,19 @@ def get_current_user_from_token(credentials: HTTPAuthorizationCredentials = Depe
             "role": "user",
             "is_admin": False,
             "is_active": regular_user.get("is_active", True)
+        }
+    
+    # Finally check investors collection without the token flag
+    investor = investors_collection.find_one({"_id": ObjectId(user_id)})
+    if investor:
+        return {
+            "id": str(investor["_id"]),
+            "_id": investor["_id"],
+            "email": investor.get("email", ""),
+            "full_name": investor.get("full_name", ""),
+            "role": "investor",
+            "is_admin": False,
+            "is_active": investor.get("is_active", True)
         }
     
     raise HTTPException(status_code=404, detail="User not found")

@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from database import permission_levels_collection, users_collection, access_tokens_collection
+from database import permission_levels_collection, users_collection, access_tokens_collection, investors_collection
 from bson import ObjectId
 
 class PermissionService:
@@ -44,10 +44,38 @@ class PermissionService:
     
     @staticmethod
     def get_user_permissions(user_id: str) -> Optional[dict]:
-        """Get user's permission level"""
+        """Get user's permission level - supports both users and investors"""
+        # First check users_collection
         user = users_collection.find_one({"_id": ObjectId(user_id)})
-        if not user or "permission_level_id" not in user:
+        
+        # If not found in users, check investors
+        if not user:
+            investor = investors_collection.find_one({"_id": ObjectId(user_id)})
+            if investor:
+                # Investors get default "Download Allowed" permissions
+                return {
+                    "id": "investor-default",
+                    "name": "Investor Access",
+                    "description": "Full investor access to view and download documents",
+                    "can_view": True,
+                    "can_download": True,
+                    "has_expiry": False,
+                    "max_downloads": None
+                }
             return None
+        
+        # User found but no permission level assigned
+        if "permission_level_id" not in user:
+            # Return default view-only permissions
+            return {
+                "id": "default",
+                "name": "Default Access",
+                "description": "Default access level",
+                "can_view": True,
+                "can_download": False,
+                "has_expiry": False,
+                "max_downloads": None
+            }
         
         permission = permission_levels_collection.find_one({
             "_id": ObjectId(user["permission_level_id"])
@@ -70,8 +98,15 @@ class PermissionService:
     @staticmethod
     def check_access_expiry(user_id: str) -> bool:
         """Check if user's access has expired"""
+        # First check users_collection
         user = users_collection.find_one({"_id": ObjectId(user_id)})
+        
+        # If not in users, check investors - investors don't expire by default
         if not user:
+            investor = investors_collection.find_one({"_id": ObjectId(user_id)})
+            if investor:
+                # Check if investor is active
+                return investor.get("is_active", True)
             return False
         
         permissions = PermissionService.get_user_permissions(user_id)
