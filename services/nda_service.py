@@ -47,7 +47,12 @@ be bound by the terms of this Non-Disclosure Agreement.
     @staticmethod
     def accept_nda(user_id: str, digital_signature: str, ip_address: str, user_agent: str) -> dict:
         """Record NDA acceptance"""
+        from database import investors_collection
+        
+        # Check users_collection first, then investors_collection
         user = users_collection.find_one({"_id": ObjectId(user_id)})
+        if not user:
+            user = investors_collection.find_one({"_id": ObjectId(user_id)})
         if not user:
             raise ValueError("User not found")
         
