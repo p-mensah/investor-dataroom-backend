@@ -3,7 +3,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 from models.meeting import MeetingCreate, MeetingResponse
 from services.email_service import EmailService
-from database import meetings_collection, investors_collection, admin_users_collection
+from database import meetings_collection, investors_collection, admin_users_collection, access_requests_collection
 from routers.admin_auth import get_current_user_or_admin, get_current_admin
 from bson import ObjectId
 import secrets
@@ -40,10 +40,35 @@ async def schedule_meeting(
     Can be created by admin or investor themselves
     """
     try:
-        # Verify investor exists
+        # Verify investor exists - search by multiple methods
+        investor = None
+        
+        # Try by investor_id field first (e.g., "INV-20250112-A7B3C9")
         investor = investors_collection.find_one({"investor_id": investor_id})
+        
+        # Try by MongoDB _id
         if not investor:
-            investor = admin_users_collection.find_one({"_id": ObjectId(investor_id)})
+            try:
+                investor = investors_collection.find_one({"_id": ObjectId(investor_id)})
+            except:
+                pass
+        
+        # Try in access_requests collection (approved requests)
+        if not investor:
+            try:
+                investor = access_requests_collection.find_one({
+                    "_id": ObjectId(investor_id),
+                    "status": "approved"
+                })
+            except:
+                pass
+        
+        # Fallback to admin users
+        if not investor:
+            try:
+                investor = admin_users_collection.find_one({"_id": ObjectId(investor_id)})
+            except:
+                pass
         
         if not investor:
             raise HTTPException(
