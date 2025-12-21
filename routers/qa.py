@@ -77,8 +77,9 @@ def submit_question(
 def get_qa_threads(
     current_user: dict = Depends(get_current_user_or_investor)
 ):
-    """Get Q&A threads for current user"""
-    threads = QAService.get_qa_threads(current_user["id"])
+    """Get Q&A threads for current user. Admins see all threads."""
+    is_admin = current_user.get("is_admin", False)
+    threads = QAService.get_qa_threads(current_user["id"], is_admin=is_admin)
     return threads
 
 @router.get("/search")

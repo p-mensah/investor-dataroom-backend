@@ -316,6 +316,7 @@ async def get_document(
 @router.get("/{document_id}/url")
 async def get_document_url(
     document_id: str,
+    request: Request,
     current_user: dict = Depends(get_current_user)
 ):
     """Get document URL with metadata for preview/download"""
@@ -385,6 +386,16 @@ async def get_document_url(
             download_url = file_url.replace("/raw/upload/", f"/raw/upload/fl_attachment:{encoded_filename}/")
         elif "/image/upload/" in file_url:
             download_url = file_url.replace("/image/upload/", f"/image/upload/fl_attachment:{encoded_filename}/")
+    
+    # Log document view (only for non-admins to track investor activity)
+    if not current_user.get("is_admin"):
+        DocumentService.log_document_access(
+            document_id=document_id,
+            user_id=current_user["id"],
+            action="view",
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent", "")
+        )
     
     return {
         "url": file_url,

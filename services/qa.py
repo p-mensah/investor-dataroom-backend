@@ -75,17 +75,32 @@ class QAService:
         return result.modified_count > 0
     
     @staticmethod
-    def get_qa_threads(user_id: str, include_public: bool = True) -> List[dict]:
-        """Get Q&A threads for a user"""
-        filter_query = {"$or": [{"asked_by": user_id}]}
-        
-        if include_public:
-            filter_query["$or"].append({"is_public": True, "status": "answered"})
-        
-        threads = list(qa_threads_collection.find(filter_query).sort("asked_at", -1))
+    def get_qa_threads(user_id: str, include_public: bool = True, is_admin: bool = False) -> List[dict]:
+        """Get Q&A threads for a user. Admins can see all threads."""
+        if is_admin:
+            # Admins see all threads
+            threads = list(qa_threads_collection.find().sort("asked_at", -1))
+        else:
+            # Regular users see only their own questions + public answered ones
+            filter_query = {"$or": [{"asked_by": user_id}]}
+            
+            if include_public:
+                filter_query["$or"].append({"is_public": True, "status": "answered"})
+            
+            threads = list(qa_threads_collection.find(filter_query).sort("asked_at", -1))
         
         for thread in threads:
             thread["id"] = str(thread.pop("_id"))
+            # Ensure asked_by is a string (email or name for display)
+            if "asked_by" in thread:
+                # Try to get user details for display
+                try:
+                    from database import investors_collection
+                    user = investors_collection.find_one({"_id": ObjectId(thread["asked_by"])})
+                    if user:
+                        thread["asked_by"] = user.get("email", user.get("full_name", thread["asked_by"]))
+                except:
+                    pass
         
         return threads
     

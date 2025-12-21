@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 
 from services.cloudinary_service import CloudinaryService
 from utils.cloudinary_config import initialize_cloudinary
-from database import documents_collection
+from database import documents_collection, document_access_logs_collection
 
 # Initialize Cloudinary once
 initialize_cloudinary()
@@ -165,3 +165,47 @@ class DocumentService:
         }
         
         return stats
+
+    @staticmethod
+    def log_document_access(
+        document_id: str,
+        user_id: str,
+        action: str,
+        ip_address: str = None,
+        user_agent: str = None
+    ):
+        """Log document access (view/download) for analytics"""
+        from database import investors_collection
+        
+        # Try to get user email for display
+        user_email = None
+        try:
+            user = investors_collection.find_one({"_id": ObjectId(user_id)})
+            if user:
+                user_email = user.get("email", user.get("full_name", user_id))
+        except:
+            user_email = user_id
+        
+        log_entry = {
+            "document_id": document_id,
+            "user_id": user_id,
+            "user_email": user_email,
+            "action": action,
+            "ip_address": ip_address,
+            "user_agent": user_agent,
+            "accessed_at": datetime.utcnow(),
+        }
+        
+        document_access_logs_collection.insert_one(log_entry)
+        
+        # Also increment the view/download count on the document
+        if action == "view":
+            documents_collection.update_one(
+                {"_id": ObjectId(document_id)},
+                {"$inc": {"view_count": 1}}
+            )
+        elif action == "download":
+            documents_collection.update_one(
+                {"_id": ObjectId(document_id)},
+                {"$inc": {"download_count": 1}}
+            )
