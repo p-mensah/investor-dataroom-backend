@@ -24,9 +24,15 @@ def make_timezone_aware(dt: datetime) -> datetime:
 
 
 def generate_meeting_link() -> str:
-    """Generate a unique meeting link"""
-    token = secrets.token_urlsafe(16)
-    return f"https://meet.sayetech.io/{token}"
+    """
+    Generate a unique meeting link using Jitsi Meet.
+    Jitsi is free, open-source, and requires no API keys.
+    Links work immediately without any setup.
+    """
+    # Generate a unique room name with SAYeTECH prefix for branding
+    room_id = secrets.token_urlsafe(12)
+    room_name = f"SAYeTECH-{room_id}"
+    return f"https://meet.jit.si/{room_name}"
 
 
 @router.post("/", response_model=dict)
