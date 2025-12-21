@@ -399,6 +399,29 @@ def activate_user(
 
 
 
+# Investor Management Routes
+
+@admin_router.get("/investors", response_model=List[dict])
+def list_investors(
+    current_admin: dict = Depends(require_admin)
+):
+    """List all investors (Admin only)"""
+    investors = list(investors_collection.find({"is_active": True}).sort("full_name", 1))
+    
+    result = []
+    for investor in investors:
+        result.append({
+            "id": str(investor["_id"]),
+            "email": investor.get("email", ""),
+            "full_name": investor.get("full_name", ""),
+            "company": investor.get("company", ""),
+            "investor_id": investor.get("investor_id", ""),
+            "created_at": investor.get("created_at", "").isoformat() if investor.get("created_at") else None,
+        })
+    
+    return result
+
+
 # Access Request Management Routes
 
 
